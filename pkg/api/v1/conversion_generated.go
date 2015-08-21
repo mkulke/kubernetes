@@ -2173,6 +2173,7 @@ func convert_api_ServiceSpec_To_v1_ServiceSpec(in *api.ServiceSpec, out *Service
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*api.ServiceSpec))(in)
 	}
+	out.Type = ServiceType(in.Type)
 	if in.Ports != nil {
 		out.Ports = make([]ServicePort, len(in.Ports))
 		for i := range in.Ports {
@@ -2192,7 +2193,6 @@ func convert_api_ServiceSpec_To_v1_ServiceSpec(in *api.ServiceSpec, out *Service
 		out.Selector = nil
 	}
 	out.ClusterIP = in.ClusterIP
-	out.Type = ServiceType(in.Type)
 	if in.ExternalIPs != nil {
 		out.ExternalIPs = make([]string, len(in.ExternalIPs))
 		for i := range in.ExternalIPs {
@@ -2201,6 +2201,7 @@ func convert_api_ServiceSpec_To_v1_ServiceSpec(in *api.ServiceSpec, out *Service
 	} else {
 		out.ExternalIPs = nil
 	}
+	out.LoadBalancerIP = in.LoadBalancerIP
 	out.SessionAffinity = ServiceAffinity(in.SessionAffinity)
 	return nil
 }
@@ -4605,6 +4606,7 @@ func convert_v1_ServiceSpec_To_api_ServiceSpec(in *ServiceSpec, out *api.Service
 		out.ExternalIPs = nil
 	}
 	out.SessionAffinity = api.ServiceAffinity(in.SessionAffinity)
+	out.LoadBalancerIP = in.LoadBalancerIP
 	return nil
 }
 
