@@ -104,11 +104,11 @@ func (p policy) matches(a authorizer.Attributes) bool {
 		if p.Readonly == false || (p.Readonly == a.IsReadOnly()) {
 			switch {
 			// A call to '/api' (kubectl version negotiation) is always ok on kubectl:true
-			case: p.Kubectl == true && (a.GetMetaResource() == authorizer.ApiVersions):
+			case p.Kubectl == true && (a.GetMetaResource() == authorizer.ApiVersions):
 				return true
-			case: p.Resource == "" || (p.Resource == a.GetResource()):
+			case p.Resource == "" || (p.Resource == a.GetResource()):
 				fallthrough
-			case: p.Namespace == "" || (p.Namespace == a.GetNamespace()):
+			case p.Namespace == "" || (p.Namespace == a.GetNamespace()):
 				return true
 			}
 		}
