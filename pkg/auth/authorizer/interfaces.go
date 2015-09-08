@@ -41,6 +41,10 @@ type Attributes interface {
 
 	// The kind of object, if a request is for a REST object.
 	GetResource() string
+
+	// In case a special endpoint like /api, /healthz has been called. This can
+	// only yield a value when both GetNamespace() & GetResource() return none.
+	GetNonResourcePath() string
 }
 
 // Authorizer makes an authorization decision based on information gained by making
@@ -58,10 +62,11 @@ func (f AuthorizerFunc) Authorize(a Attributes) error {
 
 // AttributesRecord implements Attributes interface.
 type AttributesRecord struct {
-	User      user.Info
-	ReadOnly  bool
-	Namespace string
-	Resource  string
+	User            user.Info
+	ReadOnly        bool
+	Namespace       string
+	Resource        string
+	NonResourcePath string
 }
 
 func (a AttributesRecord) GetUserName() string {
@@ -82,4 +87,8 @@ func (a AttributesRecord) GetNamespace() string {
 
 func (a AttributesRecord) GetResource() string {
 	return a.Resource
+}
+
+func (a AttributesRecord) GetNonResourcePath() string {
+	return a.NonResourcePath
 }

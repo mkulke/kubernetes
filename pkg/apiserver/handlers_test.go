@@ -143,6 +143,129 @@ func TestReadOnly(t *testing.T) {
 	}
 }
 
+func TestTimeout(t *testing.T) {
+	sendResponse := make(chan struct{}, 1)
+	writeErrors := make(chan error, 1)
+	timeout := make(chan time.Time, 1)
+	resp := "test response"
+	timeoutResp := "test timeout"
+
+	ts := httptest.NewServer(TimeoutHandler(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			<-sendResponse
+			_, err := w.Write([]byte(resp))
+			writeErrors <- err
+		}),
+		func(*http.Request) (<-chan time.Time, string) {
+			return timeout, timeoutResp
+		}))
+	defer ts.Close()
+
+	// No timeouts
+	sendResponse <- struct{}{}
+	res, err := http.Get(ts.URL)
+	if err != nil {
+		t.Error(err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("got res.StatusCode %d; expected %d", res.StatusCode, http.StatusOK)
+	}
+	body, _ := ioutil.ReadAll(res.Body)
+	if string(body) != resp {
+		t.Errorf("got body %q; expected %q", string(body), resp)
+	}
+	if err := <-writeErrors; err != nil {
+		t.Errorf("got unexpected Write error on first request: %v", err)
+	}
+
+	// Times out
+	timeout <- time.Time{}
+	res, err = http.Get(ts.URL)
+	if err != nil {
+		t.Error(err)
+	}
+	if res.StatusCode != http.StatusGatewayTimeout {
+		t.Errorf("got res.StatusCode %d; expected %d", res.StatusCode, http.StatusServiceUnavailable)
+	}
+	body, _ = ioutil.ReadAll(res.Body)
+	if string(body) != timeoutResp {
+		t.Errorf("got body %q; expected %q", string(body), timeoutResp)
+	}
+
+	// Now try to send a response
+	sendResponse <- struct{}{}
+	if err := <-writeErrors; err != http.ErrHandlerTimeout {
+		t.Errorf("got Write error of %v; expected %v", err, http.ErrHandlerTimeout)
+	}
+}
+
+func TestIsAPIResourceRequest(t *testing.T) {
+	testCases := []struct {
+		apiRoots       []string
+		path           string
+		expectedResult bool
+	}{
+		{[]string{"api"}, "/abc", false},
+		{[]string{"api"}, "/api/abc", true},
+		// A prefixed path requires at least two fragments
+		{[]string{"api"}, "/api", false},
+		{[]string{"api"}, "/api/", true},
+		// It might be more than one prefix available
+		{[]string{"api", "test"}, "/test/123/abc", true},
+		// The prefix might be two or more fragments
+		{[]string{"test/123"}, "/test/123/abc", true},
+		{[]string{"test/123"}, "/test/123/", true},
+		{[]string{"test/123"}, "/test/123", false},
+	}
+
+	for i, tc := range testCases {
+		t.Logf("tc %v: %v", i, tc)
+		req, _ := http.NewRequest("GET", tc.path, nil)
+		has := isAPIResourceRequest(util.NewStringSet(tc.apiRoots...), req)
+		if has != tc.expectedResult {
+			t.Errorf("expected %v, was %v", tc.expectedResult, has)
+		}
+	}
+}
+
+func TestGetAttribs(t *testing.T) {
+	r := &requestAttributeGetter{api.NewRequestContextMapper(), &APIRequestInfoResolver{util.NewStringSet("api"), nil}}
+
+	// When path does not start with an api prefix, it's a non-resource path.
+	path := "/version"
+	req, _ := http.NewRequest("GET", path, nil)
+	attribs := r.GetAttribs(req)
+	nonResourcePath := attribs.GetNonResourcePath()
+	if nonResourcePath != path {
+		t.Errorf("Expected %s, is %+v", path, nonResourcePath)
+	}
+	namespace := attribs.GetNamespace()
+	if namespace != "" {
+		t.Errorf("Expected empty, is %+v", namespace)
+	}
+	resource := attribs.GetResource()
+	if resource != "" {
+		t.Errorf("Expected empty, is %+v", resource)
+	}
+
+	// Neither non-resource nor resource path when it starts with an api prefix.
+	path = "/api/unknown"
+	req, _ = http.NewRequest("GET", path, nil)
+	attribs = r.GetAttribs(req)
+	nonResourcePath = attribs.GetNonResourcePath()
+	if nonResourcePath != "" {
+		t.Errorf("Expected empty, is %+v", nonResourcePath)
+	}
+	namespace = attribs.GetNamespace()
+	if namespace != "" {
+		t.Errorf("Expected empty, is %+v", namespace)
+	}
+	resource = attribs.GetResource()
+	if resource != "" {
+		t.Errorf("Expected empty, is %+v", resource)
+	}
+}
+
 func TestGetAPIRequestInfo(t *testing.T) {
 	successCases := []struct {
 		method              string
