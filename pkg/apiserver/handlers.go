@@ -378,6 +378,11 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 	// in empty (does not understand defaulting rules.)
 	attribs.Namespace = apiRequestInfo.Namespace
 
+	// If a request does not fall into a namespace/resource pattern, it's a special path.
+	if attribs.Namespace == "" && attribs.Resource == "" {
+		attribs.NonResourcePath = req.URL.Path
+	}
+
 	return &attribs
 }
 
