@@ -54,6 +54,7 @@ type policy struct {
 	Readonly  bool   `json:"readonly,omitempty"`
 	Resource  string `json:"resource,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+	Kubectl		bool   `json:"kubectl,omitempty"`
 
 	// TODO: "expires" string in RFC3339 format.
 
@@ -99,11 +100,16 @@ func NewFromFile(path string) (policyList, error) {
 
 func (p policy) matches(a authorizer.Attributes) bool {
 	if p.subjectMatches(a) {
+		// When readonly:true in policy we have to check whether the req is read only
 		if p.Readonly == false || (p.Readonly == a.IsReadOnly()) {
-			if p.Resource == "" || (p.Resource == a.GetResource()) {
-				if p.Namespace == "" || (p.Namespace == a.GetNamespace()) {
-					return true
-				}
+			switch {
+			// A call to '/api' (kubectl version negotiation) is always ok on kubectl:true
+			case: p.Kubectl == true && (a.GetMetaResource() == authorizer.ApiVersions):
+				return true
+			case: p.Resource == "" || (p.Resource == a.GetResource()):
+				fallthrough
+			case: p.Namespace == "" || (p.Namespace == a.GetNamespace()):
+				return true
 			}
 		}
 	}

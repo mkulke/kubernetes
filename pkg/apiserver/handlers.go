@@ -216,6 +216,16 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 	// in empty (does not understand defaulting rules.)
 	attribs.Namespace = apiRequestInfo.Namespace
 
+	// If the raw path is just a single item, the request is to a special resource.
+	if len(apiRequestInfo.Raw) == 1 {
+		switch apiRequestInfo.Raw[0] {
+			case "api":
+				attribs.MetaResource = authorizer.ApiVersions
+			case "healthz":
+				attribs.MetaResource = authorizer.HealthCheck
+		}
+	}
+
 	return &attribs
 }
 

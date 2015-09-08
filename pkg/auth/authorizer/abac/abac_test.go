@@ -56,15 +56,17 @@ func TestExampleFile(t *testing.T) {
 	}
 }
 
-func NotTestAuthorize(t *testing.T) {
-	a, err := newWithContents(t, `{                     "readonly": true, "kind": "events"}
-{"user":"scheduler",  "readonly": true, "kind": "pods"}
-{"user":"scheduler",              "kind": "bindings"}
-{"user":"kubelet",    "readonly": true, "kind": "bindings"}
-{"user":"kubelet",                "kind": "events"}
-{"user":"alice",                                     "ns": "projectCaribou"}
-{"user":"bob",        "readonly": true,                    "ns": "projectCaribou"}
-`)
+func TestAuthorize(t *testing.T) {
+	a, err := newWithContents(t,
+		`{										"readonly": true, "resource": "version"}
+		 {										"readonly": true, "resource": "events"}
+		 {"user":"scheduler", "readonly": true, "resource": "pods"}
+		 {"user":"scheduler", 									"resource": "bindings"}
+		 {"user":"kubelet", 	"readonly": true, "resource": "bindings"}
+		 {"user":"kubelet", 										"resource": "events"}
+		 {"user":"alice", 																							"namespace": "projectCaribou"}
+		 {"user":"bob", 			"readonly": true, 												"namespace": "projectCaribou"}`)
+
 	if err != nil {
 		t.Fatalf("unable to read policy file: %v", err)
 	}
@@ -109,9 +111,10 @@ func NotTestAuthorize(t *testing.T) {
 		{User: uChuck, RO: false, Resource: "events", NS: "ns1", ExpectAllow: false},
 		{User: uChuck, RO: true, Resource: "pods", NS: "ns1", ExpectAllow: false},
 		{User: uChuck, RO: true, Resource: "floop", NS: "ns1", ExpectAllow: false},
-		// Chunk can't access things with no kind or namespace
+		// Chuck can't access things with no kind or namespace
 		// TODO: find a way to give someone access to miscelaneous endpoints, such as
 		// /healthz, /version, etc.
+		{User: uChuck, RO: true, Resource: "version", NS: "", ExpectAllow: true},
 		{User: uChuck, RO: true, Resource: "", NS: "", ExpectAllow: false},
 	}
 	for _, tc := range testCases {
