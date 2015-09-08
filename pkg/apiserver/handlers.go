@@ -192,6 +192,19 @@ func NewRequestAttributeGetter(requestContextMapper api.RequestContextMapper, re
 	return &requestAttributeGetter{requestContextMapper, &APIRequestInfoResolver{util.NewStringSet(apiRoots...), restMapper}}
 }
 
+func isAPIResourceRequest(apiPrefixes util.StringSet, req *http.Request) bool {
+	// Slice the first / of the path off (in apiRoots they're stored w/o leading /)
+	parts := strings.Split(req.URL.Path, "/")[1:]
+	// Paths with only one fragment won't have a prefix.
+	for i := 1; i < len(parts); i++ {
+		prefix := strings.Join(parts[:i], "/")
+		if apiPrefixes.Has(prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attributes {
 	attribs := authorizer.AttributesRecord{}
 
@@ -205,16 +218,22 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 
 	attribs.ReadOnly = IsReadOnlyReq(*req)
 
-	apiRequestInfo, _ := r.apiRequestInfoResolver.GetAPIRequestInfo(req)
+	// Check whether meaningful api information can be resolved for the current path
+	if isAPIResourceRequest(r.apiRequestInfoResolver.APIPrefixes, req) {
+		apiRequestInfo, _ := r.apiRequestInfoResolver.GetAPIRequestInfo(req)
 
-	// If a path follows the conventions of the REST object store, then
-	// we can extract the resource.  Otherwise, not.
-	attribs.Resource = apiRequestInfo.Resource
+		// If a path follows the conventions of the REST object store, then
+		// we can extract the resource.  Otherwise, not.
+		attribs.Resource = apiRequestInfo.Resource
 
-	// If the request specifies a namespace, then the namespace is filled in.
-	// Assumes there is no empty string namespace.  Unspecified results
-	// in empty (does not understand defaulting rules.)
-	attribs.Namespace = apiRequestInfo.Namespace
+		// If the request specifies a namespace, then the namespace is filled in.
+		// Assumes there is no empty string namespace.  Unspecified results
+		// in empty (does not understand defaulting rules.)
+		attribs.Namespace = apiRequestInfo.Namespace
+	} else {
+		// If a request does not fall into an api namespace/resource pattern, it's a special path.
+		attribs.NonResourcePath = req.URL.Path
+	}
 
 	return &attribs
 }
