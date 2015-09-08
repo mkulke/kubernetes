@@ -58,14 +58,14 @@ func TestExampleFile(t *testing.T) {
 
 func TestAuthorize(t *testing.T) {
 	a, err := newWithContents(t,
-		`{										"readonly": true, "resource": "version"}
-		 {										"readonly": true, "resource": "events"}
+		`{										"readonly": true, "resource": "events"}
 		 {"user":"scheduler", "readonly": true, "resource": "pods"}
 		 {"user":"scheduler", 									"resource": "bindings"}
 		 {"user":"kubelet", 	"readonly": true, "resource": "bindings"}
 		 {"user":"kubelet", 										"resource": "events"}
 		 {"user":"alice", 																							"namespace": "projectCaribou"}
-		 {"user":"bob", 			"readonly": true, 												"namespace": "projectCaribou"}`)
+		 {"user":"bob", 			"readonly": true, 												"namespace": "projectCaribou"}
+		 {"user":"chuck", 																							"namespace":"ns2",							"kubectl": true}`)
 
 	if err != nil {
 		t.Fatalf("unable to read policy file: %v", err)
@@ -76,11 +76,12 @@ func TestAuthorize(t *testing.T) {
 	uChuck := user.DefaultInfo{Name: "chuck", UID: "uid5"}
 
 	testCases := []struct {
-		User        user.DefaultInfo
-		RO          bool
-		Resource    string
-		NS          string
-		ExpectAllow bool
+		User        	user.DefaultInfo
+		RO          	bool
+		Resource    	string
+		NS          	string
+		ExpectAllow 	bool
+		MetaResource	authorizer.MetaResource
 	}{
 		// Scheduler can read pods
 		{User: uScheduler, RO: true, Resource: "pods", NS: "ns1", ExpectAllow: true},
@@ -112,17 +113,17 @@ func TestAuthorize(t *testing.T) {
 		{User: uChuck, RO: true, Resource: "pods", NS: "ns1", ExpectAllow: false},
 		{User: uChuck, RO: true, Resource: "floop", NS: "ns1", ExpectAllow: false},
 		// Chuck can't access things with no kind or namespace
-		// TODO: find a way to give someone access to miscelaneous endpoints, such as
-		// /healthz, /version, etc.
-		{User: uChuck, RO: true, Resource: "version", NS: "", ExpectAllow: true},
 		{User: uChuck, RO: true, Resource: "", NS: "", ExpectAllow: false},
+		// but can access /api
+		{User: uChuck, RO: true, MetaResource: authorizer.ApiVersions, Resource: "", NS: "", ExpectAllow: true},
 	}
 	for _, tc := range testCases {
 		attr := authorizer.AttributesRecord{
-			User:      &tc.User,
-			ReadOnly:  tc.RO,
-			Resource:  tc.Resource,
-			Namespace: tc.NS,
+			User:      		&tc.User,
+			ReadOnly:  		tc.RO,
+			Resource:  		tc.Resource,
+			Namespace: 		tc.NS,
+			MetaResource: tc.MetaResource,
 		}
 		t.Logf("tc: %v -> attr %v", tc, attr)
 		err := a.Authorize(attr)

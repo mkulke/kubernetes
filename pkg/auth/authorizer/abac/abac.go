@@ -106,10 +106,12 @@ func (p policy) matches(a authorizer.Attributes) bool {
 			// A call to '/api' (kubectl version negotiation) is always ok on kubectl:true
 			case p.Kubectl == true && (a.GetMetaResource() == authorizer.ApiVersions):
 				return true
+			// Verify resource restriction
 			case p.Resource == "" || (p.Resource == a.GetResource()):
-				fallthrough
-			case p.Namespace == "" || (p.Namespace == a.GetNamespace()):
-				return true
+				// If there is none or it matches, verify ns restriction
+				if p.Namespace == "" || (p.Namespace == a.GetNamespace()) {
+					return true
+				}
 			}
 		}
 	}
