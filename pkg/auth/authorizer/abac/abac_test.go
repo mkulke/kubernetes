@@ -124,11 +124,11 @@ func TestAuthorize(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		attr := authorizer.AttributesRecord{
-			User:      				&tc.User,
-			ReadOnly:  				tc.RO,
-			Resource:  				tc.Resource,
-			Namespace: 				tc.NS,
-			NonResourcePath: 	tc.NonResourcePath,
+			User:            &tc.User,
+			ReadOnly:        tc.RO,
+			Resource:        tc.Resource,
+			Namespace:       tc.NS,
+			NonResourcePath: tc.NonResourcePath,
 		}
 		t.Logf("tc: %v -> attr %v", tc, attr)
 		err := a.Authorize(attr)
