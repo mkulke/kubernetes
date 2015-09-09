@@ -136,6 +136,7 @@ func RunGet(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []string
 			SingleResourceType().
 			Latest().
 			Do()
+		err := r.Err()
 		if err != nil {
 			return err
 		}
