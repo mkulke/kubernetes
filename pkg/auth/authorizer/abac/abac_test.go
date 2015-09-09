@@ -41,7 +41,7 @@ func TestOneLineFileNoNewLine(t *testing.T) {
 
 func TestTwoLineFile(t *testing.T) {
 	_, err := newWithContents(t, `{"user":"scheduler",  "readonly": true, "resource": "pods"}
-{"user":"scheduler",  "readonly": true, "kind": "services"}
+{"user":"scheduler",  "readonly": true, "resource": "services"}
 `)
 	if err != nil {
 		t.Errorf("unable to read policy file: %v", err)
@@ -113,7 +113,7 @@ func TestAuthorize(t *testing.T) {
 		{User: uChuck, RO: false, Resource: "events", NS: "ns1", ExpectAllow: false},
 		{User: uChuck, RO: true, Resource: "pods", NS: "ns1", ExpectAllow: false},
 		{User: uChuck, RO: true, Resource: "floop", NS: "ns1", ExpectAllow: false},
-		// Chuck can't access things with no kind or namespace
+		// Chuck can't access things with no resource or namespace
 		{User: uChuck, RO: true, Resource: "", NS: "", ExpectAllow: false},
 		// but can access /api
 		{User: uChuck, RO: true, NonResourcePath: "/api", Resource: "", NS: "", ExpectAllow: true},
@@ -122,7 +122,7 @@ func TestAuthorize(t *testing.T) {
 		// while he can write to /custom
 		{User: uChuck, RO: false, NonResourcePath: "/custom", Resource: "", NS: "", ExpectAllow: true},
 	}
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		attr := authorizer.AttributesRecord{
 			User:            &tc.User,
 			ReadOnly:        tc.RO,
@@ -130,7 +130,7 @@ func TestAuthorize(t *testing.T) {
 			Namespace:       tc.NS,
 			NonResourcePath: tc.NonResourcePath,
 		}
-		t.Logf("tc: %v -> attr %v", tc, attr)
+		t.Logf("tc %2v: %v -> attr %v", i, tc, attr)
 		err := a.Authorize(attr)
 		actualAllow := bool(err == nil)
 		if tc.ExpectAllow != actualAllow {
