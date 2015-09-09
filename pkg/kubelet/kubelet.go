@@ -64,6 +64,7 @@ import (
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/util/procfs"
+	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/version"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/watch"
@@ -977,7 +978,7 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *api.Pod, container *api.Cont
 	return opts, nil
 }
 
-var masterServices = util.NewStringSet("kubernetes")
+var masterServices = sets.NewString("kubernetes")
 
 // getServiceEnvVarMap makes a map[string]string of env vars for services a pod in namespace ns should see
 func (kl *Kubelet) getServiceEnvVarMap(ns string) (map[string]string, error) {
@@ -1402,7 +1403,7 @@ func getDesiredVolumes(pods []*api.Pod) map[string]api.Volume {
 // cleanupOrphanedPodDirs removes a pod directory if the pod is not in the
 // desired set of pods and there is no running containers in the pod.
 func (kl *Kubelet) cleanupOrphanedPodDirs(pods []*api.Pod, runningPods []*kubecontainer.Pod) error {
-	active := util.NewStringSet()
+	active := sets.NewString()
 	for _, pod := range pods {
 		active.Insert(string(pod.UID))
 	}
@@ -1440,7 +1441,7 @@ func (kl *Kubelet) cleanupBandwidthLimits(allPods []*api.Pod) error {
 	if err != nil {
 		return err
 	}
-	possibleCIDRs := util.StringSet{}
+	possibleCIDRs := sets.String{}
 	for ix := range allPods {
 		pod := allPods[ix]
 		ingress, egress, err := extractBandwidthResources(pod)
@@ -1480,7 +1481,7 @@ func (kl *Kubelet) cleanupOrphanedVolumes(pods []*api.Pod, runningPods []*kubeco
 	desiredVolumes := getDesiredVolumes(pods)
 	currentVolumes := kl.getPodVolumesFromDisk()
 
-	runningSet := util.StringSet{}
+	runningSet := sets.String{}
 	for _, pod := range runningPods {
 		runningSet.Insert(string(pod.ID))
 	}
@@ -1718,7 +1719,7 @@ func (kl *Kubelet) HandlePodCleanups() error {
 // podKiller launches a goroutine to kill a pod received from the channel if
 // another goroutine isn't already in action.
 func (kl *Kubelet) podKiller() {
-	killing := util.NewStringSet()
+	killing := sets.NewString()
 	resultCh := make(chan types.UID)
 	defer close(resultCh)
 	for {
@@ -1765,7 +1766,7 @@ func (s podsByCreationTime) Less(i, j int) bool {
 
 // checkHostPortConflicts detects pods with conflicted host ports.
 func hasHostPortConflicts(pods []*api.Pod) bool {
-	ports := util.StringSet{}
+	ports := sets.String{}
 	for _, pod := range pods {
 		if errs := validation.AccumulateUniqueHostPorts(pod.Spec.Containers, &ports); len(errs) > 0 {
 			glog.Errorf("Pod %q: HostPort is already allocated, ignoring: %v", kubecontainer.GetPodFullName(pod), errs)
