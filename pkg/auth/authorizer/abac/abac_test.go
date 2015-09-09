@@ -33,14 +33,14 @@ func TestEmptyFile(t *testing.T) {
 }
 
 func TestOneLineFileNoNewLine(t *testing.T) {
-	_, err := newWithContents(t, `{"user":"scheduler",  "readonly": true, "kind": "pods", "namespace":"ns1"}`)
+	_, err := newWithContents(t, `{"user":"scheduler",  "readonly": true, "resource": "pods", "namespace":"ns1"}`)
 	if err != nil {
 		t.Errorf("unable to read policy file: %v", err)
 	}
 }
 
 func TestTwoLineFile(t *testing.T) {
-	_, err := newWithContents(t, `{"user":"scheduler",  "readonly": true, "kind": "pods"}
+	_, err := newWithContents(t, `{"user":"scheduler",  "readonly": true, "resource": "pods"}
 {"user":"scheduler",  "readonly": true, "kind": "services"}
 `)
 	if err != nil {
@@ -77,12 +77,12 @@ func TestAuthorize(t *testing.T) {
 	uChuck := user.DefaultInfo{Name: "chuck", UID: "uid5"}
 
 	testCases := []struct {
-		User        		user.DefaultInfo
-		RO          		bool
-		Resource    		string
-		NS          		string
-		NonResourcePath	string
-		ExpectAllow 		bool
+		User            user.DefaultInfo
+		RO              bool
+		Resource        string
+		NS              string
+		NonResourcePath string
+		ExpectAllow     bool
 	}{
 		// Scheduler can read pods
 		{User: uScheduler, RO: true, Resource: "pods", NS: "ns1", ExpectAllow: true},
