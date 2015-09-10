@@ -376,6 +376,7 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 			reqHasApiPrefix = true
 			break
 		}
+		i++
 	}
 
 	if reqHasApiPrefix == true {
