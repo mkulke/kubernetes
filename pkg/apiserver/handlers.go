@@ -368,8 +368,17 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 	attribs.ReadOnly = IsReadOnlyReq(*req)
 
 	// Check whether meaningful api information can be resolved for the current path
+	reqHasApiPrefix := false
 	parts := splitPath(req.URL.Path)
-	if len(parts) > 0 && r.apiRequestInfoResolver.APIPrefixes.Has(parts[0]) {
+	i := 0
+	for range parts {
+		if r.apiRequestInfoResolver.APIPrefixes.Has(strings.Join(parts[i:], "/")) {
+			reqHasApiPrefix = true
+			break
+		}
+	}
+
+	if reqHasApiPrefix == true {
 		apiRequestInfo, _ := r.apiRequestInfoResolver.GetAPIRequestInfo(req)
 
 		// If a path follows the conventions of the REST object store, then
