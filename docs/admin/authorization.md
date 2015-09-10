@@ -113,7 +113,9 @@ To permit an action Policy with an unset namespace applies regardless of namespa
 
 ### Kubectl
 
-Kubectl uses the `/api` endpoint of api-server to negotiate client/server versions. When users, who are restricted by namespaces, should be able to use the kubectl client, `/api` has to be exempted from authorization checks via a `"nonResourcePath":"/api"` entry in the policy file (see example below).
+Kubectl uses the `/api` endpoint of api-server to negotiate client/server versions. To validate objects send to the API by create/update operations, kubectl queries certain swagger resources. For API version `v1` those would be `/swaggerapi/api/v1` & `/swaggerapi/experimental/v1`.
+
+ When users, who are restricted by namespaces, should be able to use the kubectl client, `/api` has to be exempted from authorization checks via a `"nonResourcePath":"/api"` entry in the policy file. When those users are suppossed to create or update resources, additional policies for the swagger paths `"nonResourcePath":"/swaggerapi/api/v1"`, `"nonResourcePath":"/swaggerapi/experimental/v1"` (assuming `v1` is the API version being used) have to be added (see example below).
 
 ### Examples
 
