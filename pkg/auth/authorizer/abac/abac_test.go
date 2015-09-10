@@ -58,15 +58,15 @@ func TestExampleFile(t *testing.T) {
 
 func TestAuthorize(t *testing.T) {
 	a, err := newWithContents(t,
-	`{                    "readonly": true,                                                        "nonResourcePath": "/api"}
-	 {                                                                                             "nonResourcePath": "/custom"}
-	 {                    "readonly": true, "resource": "events"}
-	 {"user":"scheduler", "readonly": true, "resource": "pods"}
-	 {"user":"scheduler",                   "resource": "bindings"}
-	 {"user":"kubelet",   "readonly": true, "resource": "bindings"}
-	 {"user":"kubelet",                     "resource": "events"}
-	 {"user":"alice",                                               "namespace": "projectCaribou"}
-	 {"user":"bob",       "readonly": true,                         "namespace": "projectCaribou"}`)
+		`{                    "readonly": true,                                                        "nonResourcePath": "/api"}
+		 {                                                                                             "nonResourcePath": "/custom"}
+		 {                    "readonly": true, "resource": "events"}
+		 {"user":"scheduler", "readonly": true, "resource": "pods"}
+		 {"user":"scheduler",                   "resource": "bindings"}
+		 {"user":"kubelet",   "readonly": true, "resource": "bindings"}
+		 {"user":"kubelet",                     "resource": "events"}
+		 {"user":"alice",                                               "namespace": "projectCaribou"}
+		 {"user":"bob",       "readonly": true,                         "namespace": "projectCaribou"}`)
 
 	if err != nil {
 		t.Fatalf("unable to read policy file: %v", err)

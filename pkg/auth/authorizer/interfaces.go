@@ -66,7 +66,7 @@ type AttributesRecord struct {
 	ReadOnly        bool
 	Namespace       string
 	Resource        string
-	NonResourcePath	string
+	NonResourcePath string
 }
 
 func (a AttributesRecord) GetUserName() string {
