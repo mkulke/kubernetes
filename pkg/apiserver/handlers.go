@@ -367,18 +367,22 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 
 	attribs.ReadOnly = IsReadOnlyReq(*req)
 
-	apiRequestInfo, _ := r.apiRequestInfoResolver.GetAPIRequestInfo(req)
+	// Check whether meaningful api information can be resolved for the current path
+	parts := splitPath(req.URL.Path)
+	if len(parts) > 0 && r.apiRequestInfoResolver.APIPrefixes.Has(parts[0]) {
+		apiRequestInfo, _ := r.apiRequestInfoResolver.GetAPIRequestInfo(req)
 
-	// If a path follows the conventions of the REST object store, then
-	// we can extract the resource.  Otherwise, not.
-	attribs.Resource = apiRequestInfo.Resource
+		// If a path follows the conventions of the REST object store, then
+		// we can extract the resource.  Otherwise, not.
+		attribs.Resource = apiRequestInfo.Resource
 
-	// If the request specifies a namespace, then the namespace is filled in.
-	// Assumes there is no empty string namespace.  Unspecified results
-	// in empty (does not understand defaulting rules.)
-	attribs.Namespace = apiRequestInfo.Namespace
+		// If the request specifies a namespace, then the namespace is filled in.
+		// Assumes there is no empty string namespace.  Unspecified results
+		// in empty (does not understand defaulting rules.)
+		attribs.Namespace = apiRequestInfo.Namespace
+	}
 
-	// If a request does not fall into a namespace/resource pattern, it's a special path.
+	// If a request does not fall into an api namespace/resource pattern, it's a special path.
 	if attribs.Namespace == "" && attribs.Resource == "" {
 		attribs.NonResourcePath = req.URL.Path
 	}
