@@ -342,6 +342,7 @@ func CORS(handler http.Handler, allowedOriginPatterns []*regexp.Regexp, allowedM
 // RequestAttributeGetter is a function that extracts authorizer.Attributes from an http.Request
 type RequestAttributeGetter interface {
 	GetAttribs(req *http.Request) (attribs authorizer.Attributes)
+	hasApiPrefix(req *http.Request) bool
 }
 
 type requestAttributeGetter struct {
@@ -352,6 +353,15 @@ type requestAttributeGetter struct {
 // NewAttributeGetter returns an object which implements the RequestAttributeGetter interface.
 func NewRequestAttributeGetter(requestContextMapper api.RequestContextMapper, restMapper meta.RESTMapper, apiRoots ...string) RequestAttributeGetter {
 	return &requestAttributeGetter{requestContextMapper, &APIRequestInfoResolver{util.NewStringSet(apiRoots...), restMapper}}
+}
+
+func (r *requestAttributeGetter) hasApiPrefix(req *http.Request) bool {
+	has := false
+	parts := splitPath(req.URL.Path)
+	for i := 0; i < len(parts) && !has; i++ {
+		has = r.apiRequestInfoResolver.APIPrefixes.Has(strings.Join(parts[:i], "/"))
+	}
+	return has
 }
 
 func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attributes {
@@ -368,18 +378,7 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 	attribs.ReadOnly = IsReadOnlyReq(*req)
 
 	// Check whether meaningful api information can be resolved for the current path
-	reqHasApiPrefix := false
-	parts := splitPath(req.URL.Path)
-	i := 0
-	for range parts {
-		if r.apiRequestInfoResolver.APIPrefixes.Has(strings.Join(parts[i:], "/")) {
-			reqHasApiPrefix = true
-			break
-		}
-		i++
-	}
-
-	if reqHasApiPrefix == true {
+	if r.hasApiPrefix(req) {
 		apiRequestInfo, _ := r.apiRequestInfoResolver.GetAPIRequestInfo(req)
 
 		// If a path follows the conventions of the REST object store, then
