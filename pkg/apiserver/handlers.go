@@ -357,9 +357,12 @@ func NewRequestAttributeGetter(requestContextMapper api.RequestContextMapper, re
 
 func (r *requestAttributeGetter) hasApiPrefix(req *http.Request) bool {
 	has := false
-	parts := splitPath(req.URL.Path)
-	for i := 0; i < len(parts) && !has; i++ {
-		has = r.apiRequestInfoResolver.APIPrefixes.Has(strings.Join(parts[:i], "/"))
+	// Slice the first / of the path off (in apiRoots they're stored w/o leading /)
+	parts := strings.Split(req.URL.Path, "/")[1:]
+	// Paths with only one fragment won't have a prefix.
+	for i := 1; i < len(parts) && !has; i++ {
+		prefix := strings.Join(parts[:i], "/")
+		has = r.apiRequestInfoResolver.APIPrefixes.Has(prefix)
 	}
 	return has
 }

@@ -209,12 +209,13 @@ func TestHasApiPrefix(t *testing.T) {
 		{[]string{"api"}, "/api/abc", true},
 		// A prefixed path requires at least two fragments
 		{[]string{"api"}, "/api", false},
-		{[]string{"api"}, "/api/", false},
+		{[]string{"api"}, "/api/", true},
 		// It might be more than one prefix available
 		{[]string{"api", "test"}, "/test/123/abc", true},
 		// The prefix might be two or more fragments
 		{[]string{"test/123"}, "/test/123/abc", true},
-		{[]string{"test/123"}, "/test/123/", false},
+		{[]string{"test/123"}, "/test/123/", true},
+		{[]string{"test/123"}, "/test/123", false},
 	}
 
 	for i, tc := range testCases {
