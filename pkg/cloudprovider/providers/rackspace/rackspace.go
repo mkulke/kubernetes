@@ -17,9 +17,11 @@ limitations under the License.
 package rackspace
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"regexp"
 	"time"
@@ -37,6 +39,7 @@ import (
 )
 
 const ProviderName = "rackspace"
+const metaDataPath = "/media/configdrive/openstack/latest/meta_data.json"
 
 var ErrNotFound = errors.New("Failed to find object")
 var ErrMultipleResults = errors.New("Multiple results where only one expected")
@@ -55,6 +58,11 @@ func (d *MyDuration) UnmarshalText(text []byte) error {
 	}
 	d.Duration = res
 	return nil
+}
+
+type MetaData struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
 }
 
 type LoadBalancerOpts struct {
@@ -336,7 +344,18 @@ func (i *Instances) NodeAddresses(name string) ([]api.NodeAddress, error) {
 
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
 func (i *Instances) ExternalID(name string) (string, error) {
-	return "", fmt.Errorf("unimplemented")
+	metaDataBytes, err := ioutil.ReadFile(metaDataPath)
+	if err != nil {
+		return "", fmt.Errorf("Cannot read %s: %v", metaDataPath, err)
+	}
+
+	metaData := MetaData{}
+	err = json.Unmarshal(metaDataBytes, &metaData)
+	if err != nil {
+		return "", fmt.Errorf("Cannot parse %s: %v", metaDataPath, err)
+	}
+
+	return metaData.UUID, nil
 }
 
 // InstanceID returns the cloud provider ID of the specified instance.
