@@ -1080,6 +1080,10 @@ func (os *OpenStack) CreateVolume(name string, size int, tags *map[string]string
 	return vol.ID, err
 }
 
+func (os *OpenStack) GetDevicePath(diskName string) (string, error) {
+	return "", nil
+}
+
 func (os *OpenStack) DeleteVolume(volumeName string) error {
 	sClient, err := openstack.NewBlockStorageV1(os.provider, gophercloud.EndpointOpts{
 		Region: os.region,

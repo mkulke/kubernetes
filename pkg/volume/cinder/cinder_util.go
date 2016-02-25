@@ -50,9 +50,13 @@ func (util *CinderDiskUtil) AttachDisk(b *cinderVolumeBuilder, globalPDPath stri
 	var devicePath string
 	numTries := 0
 	for {
-		devicePath = makeDevicePath(diskid)
+		// devicePath = makeDevicePath(diskid)
 		// probe the attached vol so that symlink in /dev/disk/by-id is created
-		probeAttachedVolume()
+		// probeAttachedVolume()
+		devicePath, err = cloud.GetDevicePath(diskid)
+		if err != nil {
+			return err
+		}
 
 		_, err := os.Stat(devicePath)
 		if err == nil {

@@ -24,9 +24,12 @@ import (
 	"io/ioutil"
 	"net"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/rackspace/gophercloud"
+	"github.com/rackspace/gophercloud/openstack/blockstorage/v1/volumes"
+	"github.com/rackspace/gophercloud/openstack/compute/v2/extensions/volumeattach"
 	osservers "github.com/rackspace/gophercloud/openstack/compute/v2/servers"
 	"github.com/rackspace/gophercloud/pagination"
 	"github.com/rackspace/gophercloud/rackspace"
@@ -75,9 +78,10 @@ type LoadBalancerOpts struct {
 
 // Rackspace is an implementation of cloud provider Interface for Rackspace.
 type Rackspace struct {
-	provider *gophercloud.ProviderClient
-	region   string
-	lbOpts   LoadBalancerOpts
+	provider        *gophercloud.ProviderClient
+	region          string
+	lbOpts          LoadBalancerOpts
+	localInstanceID string
 }
 
 type Config struct {
@@ -138,10 +142,16 @@ func newRackspace(cfg Config) (*Rackspace, error) {
 		return nil, err
 	}
 
+	id, err := readInstanceID()
+	if err != nil {
+		return nil, err
+	}
+
 	os := Rackspace{
-		provider: provider,
-		region:   cfg.Global.Region,
-		lbOpts:   cfg.LoadBalancer,
+		provider:        provider,
+		region:          cfg.Global.Region,
+		lbOpts:          cfg.LoadBalancer,
+		localInstanceID: id,
 	}
 	return &os, nil
 }
@@ -342,8 +352,7 @@ func (i *Instances) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	return []api.NodeAddress{{Type: api.NodeLegacyHostIP, Address: net.ParseIP(ip).String()}}, nil
 }
 
-// ExternalID returns the cloud provider ID of the specified instance (deprecated).
-func (i *Instances) ExternalID(name string) (string, error) {
+func readInstanceID() (string, error) {
 	metaDataBytes, err := ioutil.ReadFile(metaDataPath)
 	if err != nil {
 		return "", fmt.Errorf("Cannot read %s: %v", metaDataPath, err)
@@ -358,9 +367,14 @@ func (i *Instances) ExternalID(name string) (string, error) {
 	return metaData.UUID, nil
 }
 
+// ExternalID returns the cloud provider ID of the specified instance (deprecated).
+func (i *Instances) ExternalID(name string) (string, error) {
+	return readInstanceID()
+}
+
 // InstanceID returns the cloud provider ID of the specified instance.
 func (i *Instances) InstanceID(name string) (string, error) {
-	return "", nil
+	return readInstanceID()
 }
 
 // InstanceType returns the type of the specified instance.
@@ -409,4 +423,131 @@ func (os *Rackspace) GetZone() (cloudprovider.Zone, error) {
 	glog.V(1).Infof("Current zone is %v", os.region)
 
 	return cloudprovider.Zone{Region: os.region}, nil
+}
+
+// Create a volume of given size (in GiB)
+func (os *Rackspace) CreateVolume(size int, tags *map[string]string) (volumeName string, err error) {
+	return "", errors.New("unimplemented")
+}
+
+func (os *Rackspace) DeleteVolume(volumeName string) error {
+	return errors.New("unimplemented")
+}
+
+// Attaches given cinder volume to the compute running kubelet
+func (os *Rackspace) AttachDisk(diskName string) (string, error) {
+	disk, err := os.getVolume(diskName)
+	if err != nil {
+		return "", err
+	}
+	cClient, err := rackspace.NewComputeV2(os.provider, gophercloud.EndpointOpts{
+		Region: os.region,
+	})
+	if err != nil || cClient == nil {
+		glog.Errorf("Unable to initialize nova client for region: %s", os.region)
+		return "", err
+	}
+
+	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil {
+		if os.localInstanceID == disk.Attachments[0]["server_id"] {
+			glog.V(4).Infof("Disk: %q is already attached to compute: %q", diskName, os.localInstanceID)
+			return disk.ID, nil
+		} else {
+			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0]["server_id"])
+			glog.Errorf(errMsg)
+			return "", errors.New(errMsg)
+		}
+	}
+	// add read only flag here if possible spothanis
+	_, err = volumeattach.Create(cClient, os.localInstanceID, &volumeattach.CreateOpts{
+		VolumeID: disk.ID,
+	}).Extract()
+	if err != nil {
+		glog.Errorf("Failed to attach %s volume to %s compute", diskName, os.localInstanceID)
+		return "", err
+	}
+	glog.V(2).Infof("Successfully attached %s volume to %s compute", diskName, os.localInstanceID)
+	return disk.ID, nil
+}
+
+func (os *Rackspace) GetDevicePath(diskName string) (string, error) {
+	volume, err := os.getVolume(diskName)
+	if err != nil {
+		return "", err
+	}
+	attachments := volume.Attachments
+	if len(attachments) != 1 {
+		errMsg := fmt.Sprintf("Unexpected number of volume attachements on %s: %d", diskName, len(attachments))
+		glog.Error(errMsg)
+		return "", errors.New(errMsg)
+	}
+	devicePath := attachments[0]["device"].(string)
+	return devicePath, nil
+}
+
+// Takes a partial/full disk id or diskname
+func (os *Rackspace) getVolume(diskName string) (volumes.Volume, error) {
+	sClient, err := rackspace.NewBlockStorageV1(os.provider, gophercloud.EndpointOpts{
+		Region: os.region,
+	})
+
+	var volume volumes.Volume
+	if err != nil || sClient == nil {
+		glog.Errorf("Unable to initialize cinder client for region: %s", os.region)
+		return volume, err
+	}
+
+	err = volumes.List(sClient, nil).EachPage(func(page pagination.Page) (bool, error) {
+		vols, err := volumes.ExtractVolumes(page)
+		if err != nil {
+			glog.Errorf("Failed to extract volumes: %v", err)
+			return false, err
+		} else {
+			for _, v := range vols {
+				glog.V(4).Infof("%s %s %v", v.ID, v.Name, v.Attachments)
+				if v.Name == diskName || strings.Contains(v.ID, diskName) {
+					volume = v
+					return true, nil
+				}
+			}
+		}
+		// if it reached here then no disk with the given name was found.
+		errmsg := fmt.Sprintf("Unable to find disk: %s in region %s", diskName, os.region)
+		return false, errors.New(errmsg)
+	})
+	if err != nil {
+		glog.Errorf("Error occured getting volume: %s", diskName)
+		return volume, err
+	}
+	return volume, err
+}
+
+// Detaches given cinder volume from the compute running kubelet
+func (os *Rackspace) DetachDisk(partialDiskId string) error {
+	disk, err := os.getVolume(partialDiskId)
+	if err != nil {
+		return err
+	}
+	cClient, err := rackspace.NewComputeV2(os.provider, gophercloud.EndpointOpts{
+		Region: os.region,
+	})
+	if err != nil || cClient == nil {
+		glog.Errorf("Unable to initialize nova client for region: %s", os.region)
+		return err
+	}
+	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && os.localInstanceID == disk.Attachments[0]["server_id"] {
+		// This is a blocking call and effects kubelet's performance directly.
+		// We should consider kicking it out into a separate routine, if it is bad.
+		err = volumeattach.Delete(cClient, os.localInstanceID, disk.ID).ExtractErr()
+		if err != nil {
+			glog.Errorf("Failed to delete volume %s from compute %s attached %v", disk.ID, os.localInstanceID, err)
+			return err
+		}
+		glog.V(2).Infof("Successfully detached volume: %s from compute: %s", disk.ID, os.localInstanceID)
+	} else {
+		errMsg := fmt.Sprintf("Disk: %s has no attachments or is not attached to compute: %s", disk.Name, os.localInstanceID)
+		glog.Errorf(errMsg)
+		return errors.New(errMsg)
+	}
+	return nil
 }
