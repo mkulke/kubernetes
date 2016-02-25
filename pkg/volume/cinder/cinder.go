@@ -44,7 +44,7 @@ type CinderFunctionality interface {
 	AttachDisk(diskName string) (string, error)
 	DetachDisk(partialDiskId string) error
 	DeleteVolume(volumeName string) error
-	CreateVolume(size int, tags *map[string]string) (volumeName string, err error)
+	CreateVolume(name string, size int, tags *map[string]string) (volumeName string, err error)
 	GetDevicePath(diskName string) (string, error)
 }
 

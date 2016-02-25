@@ -426,7 +426,7 @@ func (os *Rackspace) GetZone() (cloudprovider.Zone, error) {
 }
 
 // Create a volume of given size (in GiB)
-func (os *Rackspace) CreateVolume(size int, tags *map[string]string) (volumeName string, err error) {
+func (os *Rackspace) CreateVolume(name string, size int, tags *map[string]string) (volumeName string, err error) {
 	return "", errors.New("unimplemented")
 }
 
