@@ -40,7 +40,7 @@ func ProbeVolumePlugins() []volume.VolumePlugin {
 	return []volume.VolumePlugin{&cinderPlugin{}}
 }
 
-type CinderFunctionality interface {
+type CinderProvider interface {
 	AttachDisk(diskName string) (string, error)
 	DetachDisk(partialDiskId string) error
 	DeleteVolume(volumeName string) error
@@ -162,7 +162,7 @@ func (plugin *cinderPlugin) newProvisionerInternal(options volume.VolumeOptions,
 	}, nil
 }
 
-func (plugin *cinderPlugin) getCloudProvider() (CinderFunctionality, error) {
+func (plugin *cinderPlugin) getCloudProvider() (CinderProvider, error) {
 	cloud := plugin.host.GetCloudProvider()
 	if cloud == nil {
 		glog.Errorf("Cloud provider not initialized properly")
