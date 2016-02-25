@@ -45,7 +45,7 @@ type CinderFunctionality interface {
 	DetachDisk(partialDiskId string) error
 	DeleteVolume(volumeName string) error
 	CreateVolume(name string, size int, tags *map[string]string) (volumeName string, err error)
-	GetDevicePath(diskName string) (string, error)
+	GetDevicePath(diskId string) string
 }
 
 type cinderPlugin struct {

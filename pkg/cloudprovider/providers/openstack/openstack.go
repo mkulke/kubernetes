@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -1080,8 +1081,19 @@ func (os *OpenStack) CreateVolume(name string, size int, tags *map[string]string
 	return vol.ID, err
 }
 
-func (os *OpenStack) GetDevicePath(diskName string) (string, error) {
-	return "", nil
+func (os *OpenStack) GetDevicePath(diskId string) string {
+	files, _ := ioutil.ReadDir("/dev/disk/by-id/")
+	for _, f := range files {
+		if strings.Contains(f.Name(), "virtio-") {
+			devid_prefix := f.Name()[len("virtio-"):len(f.Name())]
+			if strings.Contains(diskId, devid_prefix) {
+				glog.V(4).Infof("Found disk attached as %q; full devicepath: %s\n", f.Name(), path.Join("/dev/disk/by-id/", f.Name()))
+				return path.Join("/dev/disk/by-id/", f.Name())
+			}
+		}
+	}
+	glog.Warningf("Failed to find device for the diskid: %q\n", diskId)
+	return ""
 }
 
 func (os *OpenStack) DeleteVolume(volumeName string) error {
