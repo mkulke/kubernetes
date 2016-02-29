@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -78,10 +79,9 @@ type LoadBalancerOpts struct {
 
 // Rackspace is an implementation of cloud provider Interface for Rackspace.
 type Rackspace struct {
-	provider        *gophercloud.ProviderClient
-	region          string
-	lbOpts          LoadBalancerOpts
-	localInstanceID string
+	provider *gophercloud.ProviderClient
+	region   string
+	lbOpts   LoadBalancerOpts
 }
 
 type Config struct {
@@ -98,6 +98,64 @@ type Config struct {
 		Region     string
 	}
 	LoadBalancer LoadBalancerOpts
+}
+
+func probeNodeAddress(compute *gophercloud.ServiceClient, name string) (string, error) {
+	id, err := readInstanceID()
+	if err == nil {
+		srv, err := servers.Get(compute, id).Extract()
+		if err != nil {
+			return "", err
+		}
+		return getAddressByServer(srv)
+	}
+
+	ip, err := getAddressByName(compute, name)
+	if err != nil {
+		return "", err
+	}
+
+	return ip, nil
+}
+
+func probeInstanceID(client *gophercloud.ServiceClient, name string) (string, error) {
+	// Attempt to read id from config drive.
+	id, err := readInstanceID()
+	if err == nil {
+		return id, nil
+	}
+
+	// Attempt to get the server by the name from the API
+	server, err := getServerByName(client, name)
+	if err != nil {
+		return "", err
+	}
+
+	return server.ID, nil
+}
+
+func parseMetaData(file io.Reader) (string, error) {
+	metaDataBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("Cannot read %s: %v", file, err)
+	}
+
+	metaData := MetaData{}
+	err = json.Unmarshal(metaDataBytes, &metaData)
+	if err != nil {
+		return "", fmt.Errorf("Cannot parse %s: %v", metaDataPath, err)
+	}
+
+	return metaData.UUID, nil
+}
+
+func readInstanceID() (string, error) {
+	file, err := os.Open(metaDataPath)
+	if err != nil {
+		return "", fmt.Errorf("Cannot open %s: %v", metaDataPath, err)
+	}
+
+	return parseMetaData(file)
 }
 
 func init() {
@@ -142,17 +200,12 @@ func newRackspace(cfg Config) (*Rackspace, error) {
 		return nil, err
 	}
 
-	id, err := readInstanceID()
-	if err != nil {
-		return nil, err
+	os := Rackspace{
+		provider: provider,
+		region:   cfg.Global.Region,
+		lbOpts:   cfg.LoadBalancer,
 	}
 
-	os := Rackspace{
-		provider:        provider,
-		region:          cfg.Global.Region,
-		lbOpts:          cfg.LoadBalancer,
-		localInstanceID: id,
-	}
 	return &os, nil
 }
 
@@ -311,12 +364,7 @@ func firstAddr(netblob interface{}) string {
 	return addr
 }
 
-func getAddressByName(api *gophercloud.ServiceClient, name string) (string, error) {
-	srv, err := getServerByName(api, name)
-	if err != nil {
-		return "", err
-	}
-
+func getAddressByServer(srv *osservers.Server) (string, error) {
 	var s string
 	if s == "" {
 		s = firstAddr(srv.Addresses["private"])
@@ -336,10 +384,19 @@ func getAddressByName(api *gophercloud.ServiceClient, name string) (string, erro
 	return s, nil
 }
 
+func getAddressByName(api *gophercloud.ServiceClient, name string) (string, error) {
+	srv, err := getServerByName(api, name)
+	if err != nil {
+		return "", err
+	}
+
+	return getAddressByServer(srv)
+}
+
 func (i *Instances) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	glog.V(2).Infof("NodeAddresses(%v) called", name)
 
-	ip, err := getAddressByName(i.compute, name)
+	ip, err := probeNodeAddress(i.compute, name)
 	if err != nil {
 		return nil, err
 	}
@@ -350,29 +407,14 @@ func (i *Instances) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	return []api.NodeAddress{{Type: api.NodeLegacyHostIP, Address: net.ParseIP(ip).String()}}, nil
 }
 
-func readInstanceID() (string, error) {
-	metaDataBytes, err := ioutil.ReadFile(metaDataPath)
-	if err != nil {
-		return "", fmt.Errorf("Cannot read %s: %v", metaDataPath, err)
-	}
-
-	metaData := MetaData{}
-	err = json.Unmarshal(metaDataBytes, &metaData)
-	if err != nil {
-		return "", fmt.Errorf("Cannot parse %s: %v", metaDataPath, err)
-	}
-
-	return metaData.UUID, nil
-}
-
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
 func (i *Instances) ExternalID(name string) (string, error) {
-	return readInstanceID()
+	return probeInstanceID(i.compute, name)
 }
 
 // InstanceID returns the cloud provider ID of the specified instance.
 func (i *Instances) InstanceID(name string) (string, error) {
-	return readInstanceID()
+	return probeInstanceID(i.compute, name)
 }
 
 // InstanceType returns the type of the specified instance.
@@ -386,6 +428,8 @@ func (i *Instances) AddSSHKeyToAllInstances(user string, keyData []byte) error {
 
 // Implementation of Instances.CurrentNodeName
 func (i *Instances) CurrentNodeName(hostname string) (string, error) {
+	// Beware when changing this, nodename == hostname assumption is crucial to
+	// apiserver => kubelet communication.
 	return hostname, nil
 }
 
@@ -434,6 +478,11 @@ func (os *Rackspace) DeleteVolume(volumeName string) error {
 
 // Attaches given cinder volume to the compute running kubelet
 func (os *Rackspace) AttachDisk(diskName string) (string, error) {
+	instanceID, err := readInstanceID()
+	if err != nil {
+		return "", err
+	}
+
 	disk, err := os.getVolume(diskName)
 	if err != nil {
 		return "", err
@@ -445,8 +494,8 @@ func (os *Rackspace) AttachDisk(diskName string) (string, error) {
 	}
 
 	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil {
-		if os.localInstanceID == disk.Attachments[0]["server_id"] {
-			glog.V(4).Infof("Disk: %q is already attached to compute: %q", diskName, os.localInstanceID)
+		if instanceID == disk.Attachments[0]["server_id"] {
+			glog.V(4).Infof("Disk: %q is already attached to compute: %q", diskName, instanceID)
 			return disk.ID, nil
 		} else {
 			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0]["server_id"])
@@ -455,14 +504,14 @@ func (os *Rackspace) AttachDisk(diskName string) (string, error) {
 		}
 	}
 
-	_, err = volumeattach.Create(compute, os.localInstanceID, &volumeattach.CreateOpts{
+	_, err = volumeattach.Create(compute, instanceID, &volumeattach.CreateOpts{
 		VolumeID: disk.ID,
 	}).Extract()
 	if err != nil {
-		glog.Errorf("Failed to attach %s volume to %s compute", diskName, os.localInstanceID)
+		glog.Errorf("Failed to attach %s volume to %s compute", diskName, instanceID)
 		return "", err
 	}
-	glog.V(2).Infof("Successfully attached %s volume to %s compute", diskName, os.localInstanceID)
+	glog.V(2).Infof("Successfully attached %s volume to %s compute", diskName, instanceID)
 	return disk.ID, nil
 }
 
@@ -529,6 +578,11 @@ func (os *Rackspace) getComputeClient() (*gophercloud.ServiceClient, error) {
 
 // Detaches given cinder volume from the compute running kubelet
 func (os *Rackspace) DetachDisk(partialDiskId string) error {
+	instanceID, err := readInstanceID()
+	if err != nil {
+		return err
+	}
+
 	disk, err := os.getVolume(partialDiskId)
 	if err != nil {
 		return err
@@ -539,17 +593,17 @@ func (os *Rackspace) DetachDisk(partialDiskId string) error {
 		return err
 	}
 
-	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && os.localInstanceID == disk.Attachments[0]["server_id"] {
+	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && instanceID == disk.Attachments[0]["server_id"] {
 		// This is a blocking call and effects kubelet's performance directly.
 		// We should consider kicking it out into a separate routine, if it is bad.
-		err = volumeattach.Delete(compute, os.localInstanceID, disk.ID).ExtractErr()
+		err = volumeattach.Delete(compute, instanceID, disk.ID).ExtractErr()
 		if err != nil {
-			glog.Errorf("Failed to delete volume %s from compute %s attached %v", disk.ID, os.localInstanceID, err)
+			glog.Errorf("Failed to delete volume %s from compute %s attached %v", disk.ID, instanceID, err)
 			return err
 		}
-		glog.V(2).Infof("Successfully detached volume: %s from compute: %s", disk.ID, os.localInstanceID)
+		glog.V(2).Infof("Successfully detached volume: %s from compute: %s", disk.ID, instanceID)
 	} else {
-		errMsg := fmt.Sprintf("Disk: %s has no attachments or is not attached to compute: %s", disk.Name, os.localInstanceID)
+		errMsg := fmt.Sprintf("Disk: %s has no attachments or is not attached to compute: %s", disk.Name, instanceID)
 		glog.Errorf(errMsg)
 		return errors.New(errMsg)
 	}
