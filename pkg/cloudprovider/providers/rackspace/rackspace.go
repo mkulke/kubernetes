@@ -29,12 +29,13 @@ import (
 	"time"
 
 	"github.com/rackspace/gophercloud"
-	"github.com/rackspace/gophercloud/openstack/blockstorage/v1/volumes"
-	"github.com/rackspace/gophercloud/openstack/compute/v2/extensions/volumeattach"
+	osvolumeattach "github.com/rackspace/gophercloud/openstack/compute/v2/extensions/volumeattach"
 	osservers "github.com/rackspace/gophercloud/openstack/compute/v2/servers"
 	"github.com/rackspace/gophercloud/pagination"
 	"github.com/rackspace/gophercloud/rackspace"
+	"github.com/rackspace/gophercloud/rackspace/blockstorage/v1/volumes"
 	"github.com/rackspace/gophercloud/rackspace/compute/v2/servers"
+	"github.com/rackspace/gophercloud/rackspace/compute/v2/volumeattach"
 	"github.com/scalingdata/gcfg"
 
 	"github.com/golang/glog"
@@ -468,27 +469,27 @@ func (os *Rackspace) GetZone() (cloudprovider.Zone, error) {
 }
 
 // Create a volume of given size (in GiB)
-func (os *Rackspace) CreateVolume(name string, size int, tags *map[string]string) (volumeName string, err error) {
+func (rs *Rackspace) CreateVolume(name string, size int, tags *map[string]string) (volumeName string, err error) {
 	return "", errors.New("unimplemented")
 }
 
-func (os *Rackspace) DeleteVolume(volumeName string) error {
+func (rs *Rackspace) DeleteVolume(volumeName string) error {
 	return errors.New("unimplemented")
 }
 
 // Attaches given cinder volume to the compute running kubelet
-func (os *Rackspace) AttachDisk(diskName string) (string, error) {
+func (rs *Rackspace) AttachDisk(diskName string) (string, error) {
 	instanceID, err := readInstanceID()
 	if err != nil {
 		return "", err
 	}
 
-	disk, err := os.getVolume(diskName)
+	disk, err := rs.getVolume(diskName)
 	if err != nil {
 		return "", err
 	}
 
-	compute, err := os.getComputeClient()
+	compute, err := rs.getComputeClient()
 	if err != nil {
 		return "", err
 	}
@@ -504,7 +505,7 @@ func (os *Rackspace) AttachDisk(diskName string) (string, error) {
 		}
 	}
 
-	_, err = volumeattach.Create(compute, instanceID, &volumeattach.CreateOpts{
+	_, err = volumeattach.Create(compute, instanceID, &osvolumeattach.CreateOpts{
 		VolumeID: disk.ID,
 	}).Extract()
 	if err != nil {
@@ -515,8 +516,8 @@ func (os *Rackspace) AttachDisk(diskName string) (string, error) {
 	return disk.ID, nil
 }
 
-func (os *Rackspace) GetDevicePath(diskId string) string {
-	volume, err := os.getVolume(diskId)
+func (rs *Rackspace) GetDevicePath(diskId string) string {
+	volume, err := rs.getVolume(diskId)
 	if err != nil {
 		return ""
 	}
@@ -529,33 +530,34 @@ func (os *Rackspace) GetDevicePath(diskId string) string {
 }
 
 // Takes a partial/full disk id or diskname
-func (os *Rackspace) getVolume(diskName string) (volumes.Volume, error) {
-	sClient, err := rackspace.NewBlockStorageV1(os.provider, gophercloud.EndpointOpts{
-		Region: os.region,
+func (rs *Rackspace) getVolume(diskName string) (volumes.Volume, error) {
+	sClient, err := rackspace.NewBlockStorageV1(rs.provider, gophercloud.EndpointOpts{
+		Region: rs.region,
 	})
 
 	var volume volumes.Volume
 	if err != nil || sClient == nil {
-		glog.Errorf("Unable to initialize cinder client for region: %s", os.region)
+		glog.Errorf("Unable to initialize cinder client for region: %s", rs.region)
 		return volume, err
 	}
 
-	err = volumes.List(sClient, nil).EachPage(func(page pagination.Page) (bool, error) {
+	err = volumes.List(sClient).EachPage(func(page pagination.Page) (bool, error) {
 		vols, err := volumes.ExtractVolumes(page)
 		if err != nil {
 			glog.Errorf("Failed to extract volumes: %v", err)
 			return false, err
-		} else {
-			for _, v := range vols {
-				glog.V(4).Infof("%s %s %v", v.ID, v.Name, v.Attachments)
-				if v.Name == diskName || strings.Contains(v.ID, diskName) {
-					volume = v
-					return true, nil
-				}
+		}
+
+		for _, v := range vols {
+			glog.V(4).Infof("%s %s %v", v.ID, v.Name, v.Attachments)
+			if v.Name == diskName || strings.Contains(v.ID, diskName) {
+				volume = v
+				return true, nil
 			}
 		}
+
 		// if it reached here then no disk with the given name was found.
-		errmsg := fmt.Sprintf("Unable to find disk: %s in region %s", diskName, os.region)
+		errmsg := fmt.Sprintf("Unable to find disk: %s in region %s", diskName, rs.region)
 		return false, errors.New(errmsg)
 	})
 	if err != nil {
@@ -565,35 +567,35 @@ func (os *Rackspace) getVolume(diskName string) (volumes.Volume, error) {
 	return volume, err
 }
 
-func (os *Rackspace) getComputeClient() (*gophercloud.ServiceClient, error) {
-	client, err := rackspace.NewComputeV2(os.provider, gophercloud.EndpointOpts{
-		Region: os.region,
+func (rs *Rackspace) getComputeClient() (*gophercloud.ServiceClient, error) {
+	client, err := rackspace.NewComputeV2(rs.provider, gophercloud.EndpointOpts{
+		Region: rs.region,
 	})
 	if err != nil || client == nil {
-		glog.Errorf("Unable to initialize nova client for region: %s", os.region)
+		glog.Errorf("Unable to initialize nova client for region: %s", rs.region)
 		return nil, err
 	}
 	return client, nil
 }
 
 // Detaches given cinder volume from the compute running kubelet
-func (os *Rackspace) DetachDisk(partialDiskId string) error {
+func (rs *Rackspace) DetachDisk(partialDiskId string) error {
 	instanceID, err := readInstanceID()
 	if err != nil {
 		return err
 	}
 
-	disk, err := os.getVolume(partialDiskId)
+	disk, err := rs.getVolume(partialDiskId)
 	if err != nil {
 		return err
 	}
 
-	compute, err := os.getComputeClient()
+	compute, err := rs.getComputeClient()
 	if err != nil {
 		return err
 	}
 
-	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && instanceID == disk.Attachments[0]["server_id"] {
+	if len(disk.Attachments) > 0 && instanceID == disk.Attachments[0]["server_id"] {
 		// This is a blocking call and effects kubelet's performance directly.
 		// We should consider kicking it out into a separate routine, if it is bad.
 		err = volumeattach.Delete(compute, instanceID, disk.ID).ExtractErr()
