@@ -220,6 +220,22 @@ func readInstanceID() (string, error) {
 	return instanceID, nil
 }
 
+func probeInstanceID(client *gophercloud.ServiceClient, name string) (string, error) {
+	// Attempt to read id from filesystem or metadata server.
+	id, err := readInstanceID()
+	if err == nil {
+		return id, nil
+	}
+
+	// Attempt to get the server by the name from the API
+	server, err := getServerByName(client, name)
+	if err != nil {
+		return "", err
+	}
+
+	return server.ID, nil
+}
+
 func newOpenStack(cfg Config) (*OpenStack, error) {
 	provider, err := openstack.AuthenticatedClient(cfg.toAuthOptions())
 	if err != nil {
@@ -360,6 +376,10 @@ func getAddressesByName(client *gophercloud.ServiceClient, name string) ([]api.N
 		return nil, err
 	}
 
+	return getAddressesByServer(client, srv)
+}
+
+func getAddressesByServer(client *gophercloud.ServiceClient, srv *servers.Server) ([]api.NodeAddress, error) {
 	addrs := []api.NodeAddress{}
 
 	for network, netblob := range srv.Addresses {
@@ -452,7 +472,17 @@ func (i *Instances) AddSSHKeyToAllInstances(user string, keyData []byte) error {
 func (i *Instances) NodeAddresses(name string) ([]api.NodeAddress, error) {
 	glog.V(4).Infof("NodeAddresses(%v) called", name)
 
-	addrs, err := getAddressesByName(i.compute, name)
+	id, err := probeInstanceID(i.compute, name)
+	if err != nil {
+		return nil, err
+	}
+
+	srv, err := servers.Get(i.compute, id).Extract()
+	if err != nil {
+		return nil, err
+	}
+
+	addrs, err := getAddressesByServer(i.compute, srv)
 	if err != nil {
 		return nil, err
 	}
@@ -463,22 +493,18 @@ func (i *Instances) NodeAddresses(name string) ([]api.NodeAddress, error) {
 
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
 func (i *Instances) ExternalID(name string) (string, error) {
-	srv, err := getServerByName(i.compute, name)
-	if err != nil {
-		return "", err
-	}
-	return srv.ID, nil
+	return probeInstanceID(i.compute, name)
 }
 
 // InstanceID returns the cloud provider ID of the specified instance.
 func (i *Instances) InstanceID(name string) (string, error) {
-	srv, err := getServerByName(i.compute, name)
+	id, err := probeInstanceID(i.compute, name)
 	if err != nil {
 		return "", err
 	}
 	// In the future it is possible to also return an endpoint as:
 	// <endpoint>/<instanceid>
-	return "/" + srv.ID, nil
+	return "/" + id, nil
 }
 
 // InstanceType returns the type of the specified instance.
