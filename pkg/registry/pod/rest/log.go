@@ -34,6 +34,7 @@ import (
 type LogREST struct {
 	KubeletConn client.ConnectionInfoGetter
 	Store       *etcdgeneric.Etcd
+	Test        pod.Mgns
 }
 
 // LogREST implements GetterWithOptions
@@ -54,7 +55,7 @@ func (r *LogREST) Get(ctx api.Context, name string, opts runtime.Object) (runtim
 	if errs := validation.ValidatePodLogOptions(logOpts); len(errs) > 0 {
 		return nil, errors.NewInvalid(api.Kind("PodLogOptions"), name, errs)
 	}
-	location, transport, err := pod.LogLocation(r.Store, r.KubeletConn, ctx, name, logOpts)
+	location, transport, err := pod.LogLocation(r.Store, r.KubeletConn, ctx, r.Test, name, logOpts)
 	if err != nil {
 		return nil, err
 	}

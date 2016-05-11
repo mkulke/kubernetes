@@ -362,10 +362,15 @@ func (m *Master) initV1ResourcesStorage(c *Config) {
 	nodeStorage := nodeetcd.NewStorage(restOptions("nodes"), c.KubeletClient, m.ProxyTransport)
 	m.nodeRegistry = node.NewRegistry(nodeStorage.Node)
 
+	closure := func(nodeName string) (*api.Node, error) {
+		return m.nodeRegistry.GetNode(api.NewDefaultContext(), nodeName)
+	}
+
 	podStorage := podetcd.NewStorage(
 		restOptions("pods"),
 		kubeletclient.ConnectionInfoGetter(nodeStorage.Node),
 		m.ProxyTransport,
+		closure,
 	)
 
 	serviceStorage, serviceStatusStorage := serviceetcd.NewREST(restOptions("services"))

@@ -58,7 +58,7 @@ type REST struct {
 }
 
 // NewStorage returns a RESTStorage object that will work against pods.
-func NewStorage(opts generic.RESTOptions, k client.ConnectionInfoGetter, proxyTransport http.RoundTripper) PodStorage {
+func NewStorage(opts generic.RESTOptions, k client.ConnectionInfoGetter, proxyTransport http.RoundTripper, test pod.Mgns) PodStorage {
 	prefix := "/pods"
 
 	newListFunc := func() runtime.Object { return &api.PodList{} }
@@ -98,7 +98,7 @@ func NewStorage(opts generic.RESTOptions, k client.ConnectionInfoGetter, proxyTr
 		Pod:         &REST{store, proxyTransport},
 		Binding:     &BindingREST{store: store},
 		Status:      &StatusREST{store: &statusStore},
-		Log:         &podrest.LogREST{Store: store, KubeletConn: k},
+		Log:         &podrest.LogREST{Store: store, KubeletConn: k, Test: test},
 		Proxy:       &podrest.ProxyREST{Store: store, ProxyTransport: proxyTransport},
 		Exec:        &podrest.ExecREST{Store: store, KubeletConn: k},
 		Attach:      &podrest.AttachREST{Store: store, KubeletConn: k},

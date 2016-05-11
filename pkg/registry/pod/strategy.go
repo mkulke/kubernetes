@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/validation"
@@ -36,6 +37,8 @@ import (
 	utilnet "k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/validation/field"
 )
+
+type Mgns func(string) (*api.Node, error)
 
 // podStrategy implements behavior for Pods
 type podStrategy struct {
@@ -248,9 +251,11 @@ func LogLocation(
 	getter ResourceGetter,
 	connInfo client.ConnectionInfoGetter,
 	ctx api.Context,
+	test Mgns,
 	name string,
 	opts *api.PodLogOptions,
 ) (*url.URL, http.RoundTripper, error) {
+
 	pod, err := getPod(getter, ctx, name)
 	if err != nil {
 		return nil, nil, err
@@ -274,10 +279,32 @@ func LogLocation(
 			return nil, nil, errors.NewBadRequest(fmt.Sprintf("container %s is not valid for pod %s", container, name))
 		}
 	}
-	nodeHost := pod.Spec.NodeName
-	if len(nodeHost) == 0 {
+	nodeName := pod.Spec.NodeName
+	node, err := test(nodeName)
+	if err != nil {
+		return nil, nil, err
+	}
+	// nodeAddresses := node.Status.Addresses
+	glog.Infof("mgns, the node name is: %s", node.Name)
+	if len(nodeName) == 0 {
 		// If pod has not been assigned a host, return an empty location
 		return nil, nil, nil
+	}
+
+	// node, err := getNode(getter, ctx, nodeName)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+	// nodeAddresses := node.Status.Addresses
+	nodeHost := ""
+	// for _, address := range nodeAddresses {
+	// 	if address.Type == api.NodeHostName {
+	// 		nodeHost = address.Address
+	// 	}
+	// }
+	if len(nodeHost) == 0 {
+		glog.Warningf("%s node %s has no Hostname address set, falling back to node name to address kubelet", container, nodeName)
+		nodeHost = nodeName
 	}
 	nodeScheme, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeHost)
 	if err != nil {
