@@ -804,15 +804,8 @@ func (c *AWSCloud) ExternalID(name string) (string, error) {
 func (c *AWSCloud) InstanceID(name string) (string, error) {
 	// In the future it is possible to also return an endpoint as:
 	// <endpoint>/<zone>/<instanceid>
-	if c.selfAWSInstance.nodeName == name {
-		return "/" + c.selfAWSInstance.availabilityZone + "/" + c.selfAWSInstance.awsID, nil
-	} else {
-		inst, err := c.getInstanceByNodeName(name)
-		if err != nil {
-			return "", err
-		}
-		return "/" + orEmpty(inst.Placement.AvailabilityZone) + "/" + orEmpty(inst.InstanceId), nil
-	}
+
+	return "/" + c.selfAWSInstance.availabilityZone + "/" + c.selfAWSInstance.awsID, nil
 }
 
 // InstanceType returns the type of the specified instance.
