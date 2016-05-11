@@ -583,7 +583,7 @@ func RunKubelet(kcfg *KubeletConfig) error {
 	if len(kcfg.NodeName) == 0 {
 		// Query the cloud provider for our node name, default to Hostname
 		nodeName := kcfg.Hostname
-		if kcfg.Cloud != nil && kcfg.HostnameOverride != "" {
+		if kcfg.Cloud != nil && kcfg.HostnameOverride == "" {
 			var err error
 			instances, ok := kcfg.Cloud.Instances()
 			if !ok {
