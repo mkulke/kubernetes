@@ -2907,6 +2907,7 @@ func (kl *Kubelet) syncNetworkStatus() {
 
 // Set addresses for the node.
 func (kl *Kubelet) setNodeAddress(node *api.Node) error {
+	hostnameAddress := api.NodeAddress{Type: api.NodeHostName, Address: kl.GetHostname()}
 	// Set addresses for the node.
 	if kl.cloud != nil {
 		instances, ok := kl.cloud.Instances()
@@ -2920,17 +2921,19 @@ func (kl *Kubelet) setNodeAddress(node *api.Node) error {
 		if err != nil {
 			return fmt.Errorf("failed to get node address from cloud provider: %v", err)
 		}
-		node.Status.Addresses = nodeAddresses
+		node.Status.Addresses = append(nodeAddresses, hostnameAddress)
 	} else {
 		if kl.nodeIP != nil {
 			node.Status.Addresses = []api.NodeAddress{
 				{Type: api.NodeLegacyHostIP, Address: kl.nodeIP.String()},
 				{Type: api.NodeInternalIP, Address: kl.nodeIP.String()},
+				hostnameAddress,
 			}
 		} else if addr := net.ParseIP(kl.hostname); addr != nil {
 			node.Status.Addresses = []api.NodeAddress{
 				{Type: api.NodeLegacyHostIP, Address: addr.String()},
 				{Type: api.NodeInternalIP, Address: addr.String()},
+				hostnameAddress,
 			}
 		} else {
 			addrs, err := net.LookupIP(node.Name)
@@ -2950,6 +2953,7 @@ func (kl *Kubelet) setNodeAddress(node *api.Node) error {
 						node.Status.Addresses = []api.NodeAddress{
 							{Type: api.NodeLegacyHostIP, Address: ip.String()},
 							{Type: api.NodeInternalIP, Address: ip.String()},
+							hostnameAddress,
 						}
 						break
 					}
