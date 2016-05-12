@@ -145,21 +145,22 @@ func (r *REST) getKubeletHost(nodeName string) (string, error) {
 	return nodeName, nil
 }
 
-func (c *REST) GetConnectionInfo(ctx api.Context, nodeName string) (string, string, uint, http.RoundTripper, error) {
+func (c *REST) GetConnectionInfo(ctx api.Context, nodeName string) (*client.ConnectionInfo, error) {
 	hostname, err := c.getKubeletHost(nodeName)
 	if err != nil {
-		return "", "", 0, nil, err
+		return nil, err
 	}
-	scheme, port, transport, err := c.connection.GetConnectionInfo(ctx, hostname)
+	connectionInfo, err := c.connection.GetConnectionInfo(ctx, hostname)
 	if err != nil {
-		return "", "", 0, nil, err
+		return nil, err
 	}
 	daemonPort, err := c.getKubeletPort(ctx, nodeName)
 	if err != nil {
-		return "", "", 0, nil, err
+		return nil, err
 	}
 	if daemonPort > 0 {
-		return scheme, hostname, uint(daemonPort), transport, nil
+		connectionInfo.Port = uint(daemonPort)
 	}
-	return scheme, hostname, port, transport, nil
+
+	return connectionInfo, nil
 }

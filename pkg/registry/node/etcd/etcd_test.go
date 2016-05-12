@@ -23,6 +23,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/registry/generic"
 	"k8s.io/kubernetes/pkg/registry/registrytest"
@@ -33,8 +34,8 @@ import (
 type fakeConnectionInfoGetter struct {
 }
 
-func (fakeConnectionInfoGetter) GetConnectionInfo(ctx api.Context, nodeName string) (string, uint, http.RoundTripper, error) {
-	return "http", 12345, nil, nil
+func (fakeConnectionInfoGetter) GetConnectionInfo(ctx api.Context, nodeName string) (client.ConnectionInfo, error) {
+	return &client.ConnectionInfo{"http", "somehost", 12345, nil, nil}
 }
 
 func newStorage(t *testing.T) (*REST, *etcdtesting.EtcdTestServer) {
