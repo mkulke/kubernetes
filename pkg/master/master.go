@@ -58,6 +58,7 @@ import (
 	nodeetcd "k8s.io/kubernetes/pkg/registry/node/etcd"
 	pvetcd "k8s.io/kubernetes/pkg/registry/persistentvolume/etcd"
 	pvcetcd "k8s.io/kubernetes/pkg/registry/persistentvolumeclaim/etcd"
+	"k8s.io/kubernetes/pkg/registry/pod"
 	podetcd "k8s.io/kubernetes/pkg/registry/pod/etcd"
 	pspetcd "k8s.io/kubernetes/pkg/registry/podsecuritypolicy/etcd"
 	podtemplateetcd "k8s.io/kubernetes/pkg/registry/podtemplate/etcd"
@@ -331,6 +332,24 @@ func (m *Master) InstallAPIs(c *Config) {
 	}
 }
 
+func buildHostResolver(nodeRegistry node.Registry) pod.HostnameResolver {
+	return func(nodeName string) (string, error) {
+		node, err := nodeRegistry.GetNode(api.NewDefaultContext(), nodeName)
+		if err != nil {
+			return "", fmt.Errorf("Could not find node: %s", nodeName)
+		}
+
+		nodeAddresses := node.Status.Addresses
+		for _, address := range nodeAddresses {
+			if address.Type == api.NodeHostName {
+				return address.Address, nil
+			}
+		}
+
+		return "", fmt.Errorf("NodeAddress with type 'Hostname' was not set on node %s", nodeName)
+	}
+}
+
 func (m *Master) initV1ResourcesStorage(c *Config) {
 	dbClient := func(resource string) storage.Interface { return c.StorageDestinations.Get("", resource) }
 	restOptions := func(resource string) generic.RESTOptions {
@@ -362,15 +381,11 @@ func (m *Master) initV1ResourcesStorage(c *Config) {
 	nodeStorage := nodeetcd.NewStorage(restOptions("nodes"), c.KubeletClient, m.ProxyTransport)
 	m.nodeRegistry = node.NewRegistry(nodeStorage.Node)
 
-	closure := func(nodeName string) (*api.Node, error) {
-		return m.nodeRegistry.GetNode(api.NewDefaultContext(), nodeName)
-	}
-
 	podStorage := podetcd.NewStorage(
 		restOptions("pods"),
 		kubeletclient.ConnectionInfoGetter(nodeStorage.Node),
 		m.ProxyTransport,
-		closure,
+		buildHostResolver(m.nodeRegistry),
 	)
 
 	serviceStorage, serviceStatusStorage := serviceetcd.NewREST(restOptions("services"))

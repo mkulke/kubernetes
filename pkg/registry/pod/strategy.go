@@ -38,7 +38,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/validation/field"
 )
 
-type Mgns func(string) (*api.Node, error)
+type HostnameResolver func(string) (string, error)
 
 // podStrategy implements behavior for Pods
 type podStrategy struct {
@@ -251,7 +251,7 @@ func LogLocation(
 	getter ResourceGetter,
 	connInfo client.ConnectionInfoGetter,
 	ctx api.Context,
-	test Mgns,
+	resolveHost HostnameResolver,
 	name string,
 	opts *api.PodLogOptions,
 ) (*url.URL, http.RoundTripper, error) {
@@ -280,32 +280,16 @@ func LogLocation(
 		}
 	}
 	nodeName := pod.Spec.NodeName
-	node, err := test(nodeName)
-	if err != nil {
-		return nil, nil, err
-	}
-	// nodeAddresses := node.Status.Addresses
-	glog.Infof("mgns, the node name is: %s", node.Name)
 	if len(nodeName) == 0 {
 		// If pod has not been assigned a host, return an empty location
 		return nil, nil, nil
 	}
-
-	// node, err := getNode(getter, ctx, nodeName)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-	// nodeAddresses := node.Status.Addresses
-	nodeHost := ""
-	// for _, address := range nodeAddresses {
-	// 	if address.Type == api.NodeHostName {
-	// 		nodeHost = address.Address
-	// 	}
-	// }
-	if len(nodeHost) == 0 {
-		glog.Warningf("%s node %s has no Hostname address set, falling back to node name to address kubelet", container, nodeName)
+	nodeHost, err := resolveHost(nodeName)
+	if err != nil {
+		glog.Warningf("Failed to retrieve Hostname address for node %s, falling back to node name to address kubelet", nodeName)
 		nodeHost = nodeName
 	}
+	glog.Infof("mgns, the node hostname is: %s", nodeHost)
 	nodeScheme, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeHost)
 	if err != nil {
 		return nil, nil, err
