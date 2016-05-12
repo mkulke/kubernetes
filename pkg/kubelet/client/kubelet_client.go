@@ -54,7 +54,7 @@ type KubeletClient interface {
 }
 
 type ConnectionInfoGetter interface {
-	GetConnectionInfo(ctx api.Context, nodeName string) (scheme string, port uint, transport http.RoundTripper, err error)
+	GetConnectionInfo(ctx api.Context, nodeName string) (scheme string, hostname string, port uint, transport http.RoundTripper, err error)
 }
 
 // HTTPKubeletClient is the default implementation of KubeletHealthchecker, accesses the kubelet over HTTP.
@@ -97,15 +97,15 @@ func NewStaticKubeletClient(config *KubeletClientConfig) (KubeletClient, error) 
 }
 
 // In default HTTPKubeletClient ctx is unused.
-func (c *HTTPKubeletClient) GetConnectionInfo(ctx api.Context, nodeName string) (string, uint, http.RoundTripper, error) {
+func (c *HTTPKubeletClient) GetConnectionInfo(ctx api.Context, nodeName string) (string, string, uint, http.RoundTripper, error) {
 	if ok, msg := validation.ValidateNodeName(nodeName, false); !ok {
-		return "", 0, nil, fmt.Errorf("invalid node name: %s", msg)
+		return "", "", 0, nil, fmt.Errorf("invalid node name: %s", msg)
 	}
 	scheme := "http"
 	if c.Config.EnableHttps {
 		scheme = "https"
 	}
-	return scheme, c.Config.Port, c.Client.Transport, nil
+	return scheme, nodeName, c.Config.Port, c.Client.Transport, nil
 }
 
 // FakeKubeletClient is a fake implementation of KubeletClient which returns an error
@@ -113,8 +113,8 @@ func (c *HTTPKubeletClient) GetConnectionInfo(ctx api.Context, nodeName string) 
 // no kubelets.
 type FakeKubeletClient struct{}
 
-func (c FakeKubeletClient) GetConnectionInfo(ctx api.Context, nodeName string) (string, uint, http.RoundTripper, error) {
-	return "", 0, nil, errors.New("Not Implemented")
+func (c FakeKubeletClient) GetConnectionInfo(ctx api.Context, nodeName string) (string, string, uint, http.RoundTripper, error) {
+	return "", "", 0, nil, errors.New("Not Implemented")
 }
 
 // transportConfig converts a client config to an appropriate transport config.

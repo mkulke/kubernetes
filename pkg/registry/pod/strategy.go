@@ -274,12 +274,12 @@ func LogLocation(
 			return nil, nil, errors.NewBadRequest(fmt.Sprintf("container %s is not valid for pod %s", container, name))
 		}
 	}
-	nodeHost := pod.Spec.NodeName
-	if len(nodeHost) == 0 {
+	nodeName := pod.Spec.NodeName
+	if len(nodeName) == 0 {
 		// If pod has not been assigned a host, return an empty location
 		return nil, nil, nil
 	}
-	nodeScheme, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeHost)
+	nodeScheme, nodeHost, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -415,12 +415,12 @@ func streamLocation(
 			return nil, nil, errors.NewBadRequest(fmt.Sprintf("container %s is not valid for pod %s", container, name))
 		}
 	}
-	nodeHost := pod.Spec.NodeName
-	if len(nodeHost) == 0 {
+	nodeName := pod.Spec.NodeName
+	if len(nodeName) == 0 {
 		// If pod has not been assigned a host, return an empty location
 		return nil, nil, errors.NewBadRequest(fmt.Sprintf("pod %s does not have a host assigned", name))
 	}
-	nodeScheme, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeHost)
+	nodeScheme, nodeHost, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -449,12 +449,12 @@ func PortForwardLocation(
 		return nil, nil, err
 	}
 
-	nodeHost := pod.Spec.NodeName
-	if len(nodeHost) == 0 {
+	nodeName := pod.Spec.NodeName
+	if len(nodeName) == 0 {
 		// If pod has not been assigned a host, return an empty location
 		return nil, nil, errors.NewBadRequest(fmt.Sprintf("pod %s does not have a host assigned", name))
 	}
-	nodeScheme, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeHost)
+	nodeScheme, nodeHost, nodePort, nodeTransport, err := connInfo.GetConnectionInfo(ctx, nodeName)
 	if err != nil {
 		return nil, nil, err
 	}
