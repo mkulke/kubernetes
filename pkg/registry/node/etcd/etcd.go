@@ -126,6 +126,18 @@ func (r *REST) getKubeletPort(ctx api.Context, nodeName string) (int, error) {
 	return node.Status.DaemonEndpoints.KubeletEndpoint.Port, nil
 }
 
+func getNodeAddress(node *api.Node) string {
+	nodeAddresses := node.Status.Addresses
+	for _, address := range nodeAddresses {
+		if address.Type == api.NodeHostName {
+			return address.Address
+		}
+	}
+	nodeName := node.Name
+	glog.Warningf("Failed to retrieve Hostname for Node %s, falling back to NodeName", nodeName)
+	return nodeName
+}
+
 func (r *REST) getKubeletHost(nodeName string) (string, error) {
 	obj, err := r.Get(api.NewDefaultContext(), nodeName)
 	if err != nil {
@@ -135,14 +147,8 @@ func (r *REST) getKubeletHost(nodeName string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("Unexpected object type: %#v", node)
 	}
-	nodeAddresses := node.Status.Addresses
-	for _, address := range nodeAddresses {
-		if address.Type == api.NodeHostName {
-			return address.Address, nil
-		}
-	}
-	glog.Warningf("Failed to retrieve Hostname for Node %s, falling back to NodeName", nodeName)
-	return nodeName, nil
+
+	return getNodeAddress(node), nil
 }
 
 func (c *REST) GetConnectionInfo(ctx api.Context, nodeName string) (*client.ConnectionInfo, error) {
