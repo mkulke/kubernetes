@@ -2409,6 +2409,7 @@ func TestUpdateNewNodeStatus(t *testing.T) {
 			Addresses: []api.NodeAddress{
 				{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"},
 				{Type: api.NodeInternalIP, Address: "127.0.0.1"},
+				{Type: api.NodeHostName, Address: testKubeletHostname},
 			},
 			Images: []api.ContainerImage{
 				{
@@ -2642,6 +2643,7 @@ func TestUpdateExistingNodeStatus(t *testing.T) {
 			Addresses: []api.NodeAddress{
 				{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"},
 				{Type: api.NodeInternalIP, Address: "127.0.0.1"},
+				{Type: api.NodeHostName, Address: testKubeletHostname},
 			},
 			Images: []api.ContainerImage{
 				{
@@ -2915,6 +2917,7 @@ func TestUpdateNodeStatusWithRuntimeStateError(t *testing.T) {
 			Addresses: []api.NodeAddress{
 				{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"},
 				{Type: api.NodeInternalIP, Address: "127.0.0.1"},
+				{Type: api.NodeHostName, Address: testKubeletHostname},
 			},
 			Images: []api.ContainerImage{
 				{
